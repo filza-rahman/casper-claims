@@ -190,51 +190,32 @@ Score the strength of this case."""
 
 # ── Agent 5: Casper Logger ─────────────────────────────────────────────────────
 
-def casper_logger_agent(state: ClaimState) -> ClaimState:
+def casper_logger_agent(state: ClaimState) -> dict:
     """
-    Creates a SHA-256 hash of the case and attempts to log it on Casper Testnet.
-    Falls back gracefully if API key not configured.
+    Prepares the final case hash for the frontend to sign and deploy 
+    using the Casper Wallet browser extension.
     """
-    case_record = {
-        "timestamp": datetime.utcnow().isoformat(),
-        "company": state["company_name"],
-        "claim_type": state["claim_type"],
-        "jurisdiction": state["jurisdiction"],
-        "case_strength": state["case_strength"],
-        "complaint_hash": hashlib.sha256(
-            state["complaint_text"].encode()
-        ).hexdigest(),
+    import hashlib
+    from datetime import datetime
+
+    # 1. Safely pull data from your current pipeline state
+    company = state.get("company_name", "Unknown")
+    claim_type = state.get("claim_type", "other")
+    jurisdiction = state.get("jurisdiction", "US")
+    strength = state.get("case_strength", 0)
+    timestamp = datetime.utcnow().isoformat()
+
+    # 2. Build the unique record and calculate the SHA-256 hash
+    data_to_hash = f"{company}:{claim_type}:{jurisdiction}:{strength}:{timestamp}"
+    full_hash = hashlib.sha256(data_to_hash.encode("utf-8")).hexdigest()
+
+    print(f"[Casper Logger] Generated Case Hash for UI signing: {full_hash}")
+
+    # 3. Return the payload to pass down into your frontend
+    return {
+        "on_chain_hash": full_hash,
+        "on_chain_tx": "PENDING_WALLET_SIGNATURE"
     }
-
-    case_json = json.dumps(case_record, sort_keys=True)
-    full_hash = hashlib.sha256(case_json.encode()).hexdigest()
-
-    # Attempt Casper Testnet logging via CSPR.cloud
-    tx_id = "pending"
-    if CSPR_CLOUD_API_KEY:
-        try:
-            with httpx.Client(timeout=10) as client:
-                resp = client.post(
-                    f"{CSPR_CLOUD_BASE}/deploys",
-                    headers={
-                        "Authorization": f"Bearer {CSPR_CLOUD_API_KEY}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "memo": f"casper-claims:{full_hash}",
-                        "network_name": "casper-test",
-                    },
-                )
-                if resp.status_code in (200, 201):
-                    tx_id = resp.json().get("deploy_hash", full_hash)
-                else:
-                    tx_id = f"hash-only:{full_hash[:16]}"
-        except Exception:
-            tx_id = f"hash-only:{full_hash[:16]}"
-    else:
-        tx_id = f"hash-only:{full_hash[:16]}"
-
-    return {**state, "on_chain_hash": full_hash, "on_chain_tx": tx_id}
 
 
 # ── Graph ──────────────────────────────────────────────────────────────────────
