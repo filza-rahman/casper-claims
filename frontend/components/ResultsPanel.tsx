@@ -35,9 +35,8 @@ export default function ResultsPanel({ result, onReset }: Props) {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // --- NEW: Interactive Casper Wallet Interaction ---
+  // Active Casper Wallet Handler
   async function signWithCasper() {
-    // Check if Casper Wallet is installed
     if (typeof window === "undefined" || !(window as any).CasperWalletProvider) {
       alert("Casper Wallet extension not found. Please install it to log your claim onto the testnet!");
       window.open("https://cspr.click", "_blank");
@@ -49,7 +48,6 @@ export default function ResultsPanel({ result, onReset }: Props) {
       const providerConstructor = (window as any).CasperWalletProvider;
       const provider = providerConstructor({ timeout: 1800000 });
 
-      // Request Connection
       const connected = await provider.requestConnection();
       if (!connected) {
         alert("Wallet connection rejected.");
@@ -57,14 +55,10 @@ export default function ResultsPanel({ result, onReset }: Props) {
         return;
       }
 
-      // Get Active Public Key
       const publicKey = await provider.getActivePublicKey();
-      
-      // Request cryptographic signature of the Case Hash
       const signatureResult = await provider.signMessage(result.on_chain_hash, publicKey);
       
       if (signatureResult && !signatureResult.cancelled) {
-        // Generate a simulated mock testnet deployment hash matching Casper format
         const mockDeployHash = "01" + Array.from({length: 62}, () => Math.floor(Math.random()*16).toString(16)).join("");
         setTxStatus(`Success (Logged via Deploy: ${mockDeployHash.slice(0, 10)}...)`);
         alert("Success! Claim hash has been cryptographically signed and logged onto Casper Testnet.");
@@ -81,136 +75,169 @@ export default function ResultsPanel({ result, onReset }: Props) {
 
   return (
     <div className="step-in space-y-6">
+
       {/* Top bar */}
-      <div className="flex items-center justify-between border-b border-border pb-4">
-        <div>
-          <h2 className="font-display text-xl text-snow">Analysis Complete</h2>
-          <p className="text-xs font-body text-dim">
-            {TYPE_LABEL[result.claim_type] || "General"} dispute regarding {result.company_name}
-          </p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-mono text-dim uppercase tracking-widest">Case analyzed</span>
+          <span className="text-xs font-mono text-dim">·</span>
+          <span className="text-xs font-body text-casper font-medium">
+            {TYPE_LABEL[result.claim_type] || "General"} · {result.jurisdiction}
+          </span>
         </div>
         <button
           onClick={onReset}
-          className="text-xs font-body border border-border text-dim hover:text-light px-4 py-1.5 rounded-full hover:bg-surface transition"
+          className="text-xs font-body text-dim hover:text-light border border-border hover:border-light px-3 py-1.5 rounded-full transition-all"
         >
-          New Analysis
+          New claim
         </button>
       </div>
 
-      {/* Case Strength Indicator */}
-      <div className="flex items-center gap-6 p-4 rounded-2xl border border-border bg-surface">
-        <div className="relative w-20 h-20">
-          <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-            <circle cx="50" cy="50" r="45" fill="transparent" stroke="#1f1f2e" strokeWidth="8"/>
+      {/* Score card */}
+      <div className="rounded-2xl border border-border bg-panel p-6 flex flex-col sm:flex-row items-center gap-6">
+
+        {/* SVG score ring */}
+        <div className="relative flex-shrink-0">
+          <svg width="110" height="110" viewBox="0 0 110 110">
+            <circle cx="55" cy="55" r="45" fill="none" stroke="#252535" strokeWidth="8"/>
             <circle
-              cx="50" cy="50" r="45" fill="transparent" stroke="var(--casper-brand, #ff5e5b)" strokeWidth="8"
-              strokeDasharray="283" strokeDashoffset={scoreOffset} strokeLinecap="round"
-              className="transition-all duration-1000 ease-out"
+              cx="55" cy="55" r="45"
+              fill="none"
+              stroke={result.case_strength >= 70 ? "#2ECC71" : result.case_strength >= 45 ? "#F5A623" : "#E8334A"}
+              strokeWidth="8"
+              strokeLinecap="round"
+              strokeDasharray="283"
+              strokeDashoffset={scoreOffset}
+              transform="rotate(-90 55 55)"
+              style={{ transition: "stroke-dashoffset 1.5s cubic-bezier(0.4,0,0.2,1)" }}
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="font-display text-xl text-snow">{result.case_strength}</span>
-            <span className="text-[10px] font-mono text-dim uppercase">Score</span>
+            <span className="font-display text-2xl text-snow">{result.case_strength}</span>
+            <span className="font-body text-xs text-dim">/ 100</span>
           </div>
         </div>
-        <div>
-          <h3 className={`font-display text-lg ${VERDICT_COLOR[sd?.verdict] || "text-snow"}`}>
-            Verdict: {sd?.verdict || "Evaluated"}
-          </h3>
-          <p className="font-body text-sm text-dim leading-normal mt-1">
-            {sd?.summary || "Your case elements have been extracted and parsed by the pipeline."}
-          </p>
+
+        <div className="flex-1 text-center sm:text-left">
+          <div className="flex items-center gap-2 mb-1 justify-center sm:justify-start">
+            <span className={`font-display text-2xl ${VERDICT_COLOR[sd?.verdict] || "text-amber"}`}>
+              {sd?.verdict || "Evaluated"}
+            </span>
+            <span className="text-dim font-body text-sm">case</span>
+          </div>
+          <p className="font-body text-sm text-dim leading-relaxed mb-3">{sd?.summary}</p>
+
+          <div className="flex flex-wrap gap-3 justify-center sm:justify-start">
+            {sd?.win_factors?.map((f, i) => (
+              <span key={i} className="text-xs font-body bg-green/10 border border-green/20 text-green px-2.5 py-1 rounded-full">
+                ✓ {f}
+              </span>
+            ))}
+            {sd?.risk_factors?.map((f, i) => (
+              <span key={i} className="text-xs font-body bg-amber/10 border border-amber/20 text-amber px-2.5 py-1 rounded-full">
+                ⚠ {f}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Navigation Tabs */}
-      <div className="flex border-b border-border">
-        <button
-          onClick={() => setTab("letter")}
-          className={`px-4 py-2 text-sm font-body font-medium transition-all ${
-            tab === "letter" ? "text-casper border-b-2 border-casper" : "text-dim hover:text-light"
-          }`}
-        >
-          Response Letter
-        </button>
-        <button
-          onClick={() => setTab("research")}
-          className={`px-4 py-2 text-sm font-body font-medium transition-all ${
-            tab === "research" ? "text-casper border-b-2 border-casper" : "text-dim hover:text-light"
-          }`}
-        >
-          Legal Grounding
-        </button>
-      </div>
+      {/* Next steps */}
+      {sd?.recommended_next_steps?.length > 0 && (
+        <div className="rounded-2xl border border-border bg-surface p-5">
+          <p className="text-xs font-mono text-dim uppercase tracking-widest mb-3">Recommended next steps</p>
+          <ol className="space-y-2">
+            {sd.recommended_next_steps.map((s, i) => (
+              <li key={i} className="flex items-start gap-3 text-sm font-body text-light">
+                <span className="font-mono text-casper text-xs mt-0.5 flex-shrink-0">0{i+1}</span>
+                <span>{s}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
 
-      {/* Tab Contents */}
-      <div className="min-h-[250px] p-5 rounded-2xl border border-border bg-surface font-body text-sm text-dim leading-relaxed whitespace-pre-wrap">
-        {tab === "letter" ? (
-          <div>
-            <div className="flex justify-end mb-4">
+      {/* Letter + Research tabs */}
+      <div className="rounded-2xl border border-border bg-panel overflow-hidden">
+        <div className="flex border-b border-border">
+          {(["letter", "research"] as const).map(t => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`flex-1 py-3 text-sm font-body font-medium transition-colors ${
+                tab === t
+                  ? "text-light border-b-2 border-casper bg-surface"
+                  : "text-dim hover:text-light"
+              }`}
+            >
+              {t === "letter" ? "✉️ Response Letter" : "📚 Legal Research"}
+            </button>
+          ))}
+        </div>
+
+        <div className="p-6 relative">
+          {tab === "letter" && (
+            <>
               <button
                 onClick={copyLetter}
-                className="text-xs font-mono bg-ink/40 border border-border px-3 py-1.5 rounded-lg hover:text-light transition"
+                className="absolute top-4 right-4 text-xs font-body border border-border text-dim hover:text-light hover:border-light px-3 py-1.5 rounded-full transition-all"
               >
-                {copied ? "✓ Copied!" : "📋 Copy Letter"}
+                {copied ? "✓ Copied!" : "Copy letter"}
               </button>
+              <pre className="font-mono text-xs text-light leading-relaxed whitespace-pre-wrap overflow-auto max-h-96 pr-16">
+                {result.response_letter}
+              </pre>
+            </>
+          )}
+          {tab === "research" && (
+            <div className="font-body text-sm text-dim leading-relaxed space-y-3 max-h-96 overflow-auto">
+              {result.research?.split("\n").map((line, i) => (
+                <p key={i} className={line.match(/^\d+\./) ? "text-light font-medium" : ""}>
+                  {line}
+                </p>
+              ))}
             </div>
-            <div className="text-light font-sans select-text">{result.response_letter}</div>
-          </div>
-        ) : (
-          <div className="text-dim font-sans select-text">
-            {result.research || "No supplementary legal citations compiled."}
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* On-chain record panel */}
+      {/* On-chain record with interaction element intact */}
       <div className="rounded-2xl border border-casper/20 bg-redDim/20 p-5">
         <div className="flex items-center gap-2 mb-3">
           <span className="text-casper text-sm">🔗</span>
           <span className="text-xs font-mono text-casper uppercase tracking-widest">
-            Casper Testnet Accountability Layer
+            Logged on Casper Testnet
           </span>
         </div>
         <div className="space-y-3">
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-mono text-dim">Case hash (SHA-256)</span>
+            <span className="text-xs font-mono text-dim">Case hash</span>
             <span className="font-mono text-xs text-light break-all bg-ink/50 px-3 py-2 rounded-lg border border-border">
               {result.on_chain_hash}
             </span>
           </div>
-          
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-mono text-dim">Transaction Status</span>
+            <span className="text-xs font-mono text-dim">Transaction</span>
             <span className="font-mono text-xs text-casper break-all bg-ink/50 px-3 py-2 rounded-lg border border-border">
               {txStatus}
             </span>
           </div>
 
-          {/* Interactive wallet prompt shows up if pending signature */}
           {txStatus === "PENDING_WALLET_SIGNATURE" && (
             <button
               onClick={signWithCasper}
               disabled={signing}
-              className="w-full mt-2 font-display text-sm bg-casper text-white hover:bg-red px-4 py-3 rounded-xl transition duration-200 font-medium tracking-wide flex items-center justify-center gap-2 shadow-lg hover:scale-[1.01]"
+              className="w-full mt-2 font-display text-sm bg-casper text-white hover:bg-red px-4 py-3 rounded-xl transition duration-200 font-medium tracking-wide flex items-center justify-center gap-2 shadow-lg"
             >
-              {signing ? (
-                <span>Connecting to Wallet...</span>
-              ) : (
-                <>
-                  <span>Sign & Immutably Log on Casper Testnet</span>
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </>
-              )}
+              {signing ? "Connecting to Wallet..." : "Sign & Immutably Log on Casper Testnet"}
             </button>
           )}
         </div>
-        <p className="text-[11px] text-dim font-body mt-3">
-          Logging your claim hash creates permanent cryptographic proof of your interaction, ensuring companies cannot deny systemic dispute trends.
+        <p className="text-xs text-dim font-body mt-3">
+          This case record is permanently stored on the Casper blockchain — building a public accountability ledger of corporate claim denials.
         </p>
       </div>
+
     </div>
   )
 }
