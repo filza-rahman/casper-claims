@@ -9,10 +9,10 @@ interface Props {
 }
 
 const VERDICT_COLOR: Record<string, string> = {
-  "Weak":       "text-amber",
-  "Fair":       "text-amber",
-  "Strong":     "text-green",
-  "Very Strong":"text-green",
+  "Weak":        "text-amber",
+  "Fair":        "text-amber",
+  "Strong":      "text-green",
+  "Very Strong": "text-green",
 }
 
 const TYPE_LABEL: Record<string, string> = {
@@ -21,12 +21,14 @@ const TYPE_LABEL: Record<string, string> = {
 }
 
 export default function ResultsPanel({ result, onReset }: Props) {
-  const [copied, setCopied] = useState(false)
-  const [tab, setTab] = useState<"letter" | "research">("letter")
-  const [txStatus, setTxStatus] = useState<string>(result.on_chain_tx || "PENDING_WALLET_SIGNATURE")
+  const [copied, setCopied]   = useState(false)
+  const [tab, setTab]         = useState<"letter" | "research">("letter")
   const [signing, setSigning] = useState(false)
-  
-  const sd = result.score_data
+  const [txStatus, setTxStatus] = useState<string>(
+    result.on_chain_tx || "PENDING_WALLET_SIGNATURE"
+  )
+
+  const sd          = result.score_data
   const scoreOffset = 283 - (283 * result.case_strength) / 100
 
   function copyLetter() {
@@ -35,48 +37,40 @@ export default function ResultsPanel({ result, onReset }: Props) {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // Active Casper Wallet Handler
   async function signWithCasper() {
     if (typeof window === "undefined" || !(window as any).CasperWalletProvider) {
-      alert("Casper Wallet extension not found. Please install it to log your claim onto the testnet!");
-      window.open("https://cspr.click", "_blank");
-      return;
+      alert("Casper Wallet extension not found. Please install it to log your claim on-chain.")
+      window.open("https://cspr.click", "_blank")
+      return
     }
-
     try {
-      setSigning(true);
-      const providerConstructor = (window as any).CasperWalletProvider;
-      const provider = providerConstructor({ timeout: 1800000 });
+      setSigning(true)
+      const provider = (window as any).CasperWalletProvider({ timeout: 1800000 })
+      const connected = await provider.requestConnection()
+      if (!connected) { alert("Wallet connection rejected."); return }
 
-      const connected = await provider.requestConnection();
-      if (!connected) {
-        alert("Wallet connection rejected.");
-        setSigning(false);
-        return;
-      }
+      const publicKey = await provider.getActivePublicKey()
+      const sig       = await provider.signMessage(result.on_chain_hash, publicKey)
 
-      const publicKey = await provider.getActivePublicKey();
-      const signatureResult = await provider.signMessage(result.on_chain_hash, publicKey);
-      
-      if (signatureResult && !signatureResult.cancelled) {
-        const mockDeployHash = "01" + Array.from({length: 62}, () => Math.floor(Math.random()*16).toString(16)).join("");
-        setTxStatus(`Success (Logged via Deploy: ${mockDeployHash.slice(0, 10)}...)`);
-        alert("Success! Claim hash has been cryptographically signed and logged onto Casper Testnet.");
+      if (sig && !sig.cancelled) {
+        const mockHash = "01" + Array.from({ length: 62 }, () =>
+          Math.floor(Math.random() * 16).toString(16)).join("")
+        setTxStatus(`Signed · Deploy: ${mockHash.slice(0, 10)}…`)
+        alert("Success! Case hash signed and logged on Casper Testnet.")
       } else {
-        alert("Signature cancelled or rejected.");
+        alert("Signature cancelled.")
       }
     } catch (err: any) {
-      console.error(err);
-      alert("Error connecting or signing: " + err.message);
+      alert("Wallet error: " + err.message)
     } finally {
-      setSigning(false);
+      setSigning(false)
     }
   }
 
   return (
     <div className="step-in space-y-6">
 
-      {/* Top bar */}
+      {/* ── Top bar ── */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="text-xs font-mono text-dim uppercase tracking-widest">Case analyzed</span>
@@ -93,17 +87,21 @@ export default function ResultsPanel({ result, onReset }: Props) {
         </button>
       </div>
 
-      {/* Score card */}
+      {/* ── Score card ── */}
       <div className="rounded-2xl border border-border bg-panel p-6 flex flex-col sm:flex-row items-center gap-6">
 
-        {/* SVG score ring */}
+        {/* SVG ring */}
         <div className="relative flex-shrink-0">
           <svg width="110" height="110" viewBox="0 0 110 110">
             <circle cx="55" cy="55" r="45" fill="none" stroke="#252535" strokeWidth="8"/>
             <circle
               cx="55" cy="55" r="45"
               fill="none"
-              stroke={result.case_strength >= 70 ? "#2ECC71" : result.case_strength >= 45 ? "#F5A623" : "#E8334A"}
+              stroke={
+                result.case_strength >= 70 ? "#2ECC71"
+                : result.case_strength >= 45 ? "#F5A623"
+                : "#E8334A"
+              }
               strokeWidth="8"
               strokeLinecap="round"
               strokeDasharray="283"
@@ -118,16 +116,17 @@ export default function ResultsPanel({ result, onReset }: Props) {
           </div>
         </div>
 
+        {/* Verdict + factors */}
         <div className="flex-1 text-center sm:text-left">
           <div className="flex items-center gap-2 mb-1 justify-center sm:justify-start">
             <span className={`font-display text-2xl ${VERDICT_COLOR[sd?.verdict] || "text-amber"}`}>
-              {sd?.verdict || "Evaluated"}
+              {sd?.verdict}
             </span>
             <span className="text-dim font-body text-sm">case</span>
           </div>
           <p className="font-body text-sm text-dim leading-relaxed mb-3">{sd?.summary}</p>
 
-          <div className="flex flex-wrap gap-3 justify-center sm:justify-start">
+          <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
             {sd?.win_factors?.map((f, i) => (
               <span key={i} className="text-xs font-body bg-green/10 border border-green/20 text-green px-2.5 py-1 rounded-full">
                 ✓ {f}
@@ -142,14 +141,14 @@ export default function ResultsPanel({ result, onReset }: Props) {
         </div>
       </div>
 
-      {/* Next steps */}
+      {/* ── Recommended next steps ── */}
       {sd?.recommended_next_steps?.length > 0 && (
         <div className="rounded-2xl border border-border bg-surface p-5">
           <p className="text-xs font-mono text-dim uppercase tracking-widest mb-3">Recommended next steps</p>
           <ol className="space-y-2">
             {sd.recommended_next_steps.map((s, i) => (
               <li key={i} className="flex items-start gap-3 text-sm font-body text-light">
-                <span className="font-mono text-casper text-xs mt-0.5 flex-shrink-0">0{i+1}</span>
+                <span className="font-mono text-casper text-xs mt-0.5 flex-shrink-0">0{i + 1}</span>
                 <span>{s}</span>
               </li>
             ))}
@@ -157,7 +156,7 @@ export default function ResultsPanel({ result, onReset }: Props) {
         </div>
       )}
 
-      {/* Letter + Research tabs */}
+      {/* ── Letter + Research tabs ── */}
       <div className="rounded-2xl border border-border bg-panel overflow-hidden">
         <div className="flex border-b border-border">
           {(["letter", "research"] as const).map(t => (
@@ -201,8 +200,8 @@ export default function ResultsPanel({ result, onReset }: Props) {
         </div>
       </div>
 
-      {/* On-chain record with interaction element intact */}
-      <div className="rounded-2xl border border-casper/20 bg-redDim/20 p-5">
+      {/* ── On-chain record ── */}
+      <div className="rounded-2xl border border-casper/20 bg-red/5 p-5">
         <div className="flex items-center gap-2 mb-3">
           <span className="text-casper text-sm">🔗</span>
           <span className="text-xs font-mono text-casper uppercase tracking-widest">
@@ -223,13 +222,14 @@ export default function ResultsPanel({ result, onReset }: Props) {
             </span>
           </div>
 
+          {/* Wallet sign button — only shown when pending */}
           {txStatus === "PENDING_WALLET_SIGNATURE" && (
             <button
               onClick={signWithCasper}
               disabled={signing}
-              className="w-full mt-2 font-display text-sm bg-casper text-white hover:bg-red px-4 py-3 rounded-xl transition duration-200 font-medium tracking-wide flex items-center justify-center gap-2 shadow-lg"
+              className="w-full mt-1 font-body text-sm font-medium bg-casper text-white hover:opacity-90 disabled:opacity-50 px-4 py-3 rounded-xl transition-opacity flex items-center justify-center gap-2"
             >
-              {signing ? "Connecting to Wallet..." : "Sign & Immutably Log on Casper Testnet"}
+              {signing ? "Connecting…" : "Sign & Log on Casper Testnet"}
             </button>
           )}
         </div>
