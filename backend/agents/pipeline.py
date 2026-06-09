@@ -48,7 +48,19 @@ class ClaimState(TypedDict):
 
 def call_llm(system: str, user: str) -> str:
     messages = [SystemMessage(content=system), HumanMessage(content=user)]
-    return llm.invoke(messages).content.strip()
+    raw_content = llm.invoke(messages).content.strip()
+    
+    # Clean out markdown code blocks if the model insists on using them
+    if raw_content.startswith("```"):
+        # Split lines and drop the first and last lines (the backticks)
+        lines = raw_content.splitlines()
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        raw_content = "\n".join(lines).strip()
+        
+    return raw_content
 
 
 # ── Agent 1: Classifier ────────────────────────────────────────────────────────
