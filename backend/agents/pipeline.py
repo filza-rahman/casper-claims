@@ -10,19 +10,19 @@ import httpx
 from datetime import datetime
 from typing import TypedDict, Annotated
 from langgraph.graph import StateGraph, END
-from langchain_groq import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from dotenv import load_dotenv
 
 load_dotenv()
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 CSPR_CLOUD_API_KEY = os.getenv("CSPR_CLOUD_API_KEY", "")
 CSPR_CLOUD_BASE = "https://api.cspr.cloud"
 
-llm = ChatGroq(
-    model="llama-3.3-70b-versatile",
-    groq_api_key=GROQ_API_KEY,
+llm = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash",
+    google_api_key=GEMINI_API_KEY,
     temperature=0.3,
 )
 
@@ -48,19 +48,7 @@ class ClaimState(TypedDict):
 
 def call_llm(system: str, user: str) -> str:
     messages = [SystemMessage(content=system), HumanMessage(content=user)]
-    raw_content = llm.invoke(messages).content.strip()
-    
-    # Clean out markdown code blocks if the model insists on using them
-    if raw_content.startswith("```"):
-        # Split lines and drop the first and last lines (the backticks)
-        lines = raw_content.splitlines()
-        if lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].startswith("```"):
-            lines = lines[:-1]
-        raw_content = "\n".join(lines).strip()
-        
-    return raw_content
+    return llm.invoke(messages).content.strip()
 
 
 # ── Agent 1: Classifier ────────────────────────────────────────────────────────
@@ -202,29 +190,24 @@ Score the strength of this case."""
 
 # ── Agent 5: Casper Logger ─────────────────────────────────────────────────────
 
-def casper_logger_agent(state: ClaimState) -> dict:
+def casper_logger_agent(state: dict) -> dict:
     """
     Prepares the final case hash for the frontend to sign and deploy 
     using the Casper Wallet browser extension.
     """
-    import hashlib
-    from datetime import datetime
-
-    # 1. Safely pull data from your current pipeline state
     company = state.get("company_name", "Unknown")
     claim_type = state.get("claim_type", "other")
     jurisdiction = state.get("jurisdiction", "US")
     strength = state.get("case_strength", 0)
     timestamp = datetime.utcnow().isoformat()
 
-    # 2. Build the unique record and calculate the SHA-256 hash
     data_to_hash = f"{company}:{claim_type}:{jurisdiction}:{strength}:{timestamp}"
     full_hash = hashlib.sha256(data_to_hash.encode("utf-8")).hexdigest()
 
     print(f"[Casper Logger] Generated Case Hash for UI signing: {full_hash}")
 
-    # 3. Return the payload to pass down into your frontend
     return {
+        **state,
         "on_chain_hash": full_hash,
         "on_chain_tx": "PENDING_WALLET_SIGNATURE"
     }
