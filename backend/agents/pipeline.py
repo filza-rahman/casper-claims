@@ -189,10 +189,7 @@ Score the strength of this case."""
 
 
 # ── Agent 5: Casper Logger ─────────────────────────────────────────────────────
-
 def casper_logger_agent(state: dict) -> dict:
-    import subprocess
-
     company      = state.get("company_name", "Unknown")
     claim_type   = state.get("claim_type", "other")
     jurisdiction = state.get("jurisdiction", "US")
@@ -202,11 +199,11 @@ def casper_logger_agent(state: dict) -> dict:
     data_to_hash = f"{company}:{claim_type}:{jurisdiction}:{strength}:{timestamp}"
     full_hash    = hashlib.sha256(data_to_hash.encode("utf-8")).hexdigest()
 
-    tx_id = "PENDING_WALLET_SIGNATURE"  # fallback if node script fails
+    tx_id = "PENDING_WALLET_SIGNATURE"
 
     try:
         result = subprocess.run(
-            ["node", "casper_tx.mjs", full_hash, str(strength), claim_type],
+            ["/usr/bin/node", "casper_tx.mjs", full_hash, str(strength), claim_type],
             capture_output=True,
             text=True,
             timeout=45,
@@ -223,7 +220,7 @@ def casper_logger_agent(state: dict) -> dict:
             output = json.loads(result.stdout.strip())
             if output.get("success"):
                 tx_id = output["deployHash"]
-                print(f"[Casper Logger] ✅ Real TX: {tx_id}")
+                print(f"[Casper Logger] ✅ Real TX on testnet: {tx_id}")
             else:
                 print(f"[Casper Logger] ❌ TX failed: {output.get('error')}")
         else:
