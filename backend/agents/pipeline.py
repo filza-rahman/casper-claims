@@ -6,7 +6,9 @@ Agents: Classifier → Researcher → Legal Writer → Strength Scorer → Caspe
 import os
 import json
 import hashlib
+import shutil
 import httpx
+import subprocess
 from datetime import datetime
 from typing import TypedDict, Annotated
 from langgraph.graph import StateGraph, END
@@ -202,8 +204,13 @@ def casper_logger_agent(state: dict) -> dict:
     tx_id = "PENDING_WALLET_SIGNATURE"
 
     try:
+        # find node wherever it is
+        import shutil
+        node_path = shutil.which("node") or "/usr/bin/node" or "/usr/local/bin/node"
+        print(f"[Casper Logger] node path: {shutil.which('node')}")
+        
         result = subprocess.run(
-            ["/usr/bin/node", "casper_tx.mjs", full_hash, str(strength), claim_type],
+            [node_path, "casper_tx.mjs", full_hash, str(strength), claim_type],
             capture_output=True,
             text=True,
             timeout=45,
@@ -215,7 +222,6 @@ def casper_logger_agent(state: dict) -> dict:
             },
             cwd=os.path.dirname(os.path.abspath(__file__)) + "/.."
         )
-
         if result.stdout.strip():
             output = json.loads(result.stdout.strip())
             if output.get("success"):
