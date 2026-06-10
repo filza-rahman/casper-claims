@@ -1,13 +1,4 @@
-import { CasperClient, DeployUtil, CLPublicKey, Keys } from "casper-js-sdk";
-import { readFileSync } from "fs";
-
-const [,, caseHash, strength, claimType] = process.argv;
-
-const PRIVATE_KEY_PEM = process.env.CASPER_PRIVATE_KEY;
-const RPC_URL = "https://node.testnet.cspr.cloud/rpc";
-const AUTH_TOKEN = process.env.CSPR_CLOUD_API_KEY;
-
-async function sendTransaction() {
+sync function sendTransaction() {
   try {
     // Load key pair from PEM
     const keyPair = Keys.Ed25519.parsePrivateKey(

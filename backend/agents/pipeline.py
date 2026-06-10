@@ -192,45 +192,50 @@ Score the strength of this case."""
 
 def casper_logger_agent(state: dict) -> dict:
     import subprocess
-    import sys
 
-    company = state.get("company_name", "Unknown")
-    claim_type = state.get("claim_type", "other")
+    company      = state.get("company_name", "Unknown")
+    claim_type   = state.get("claim_type", "other")
     jurisdiction = state.get("jurisdiction", "US")
-    strength = state.get("case_strength", 0)
-    timestamp = datetime.utcnow().isoformat()
+    strength     = state.get("case_strength", 0)
+    timestamp    = datetime.utcnow().isoformat()
 
     data_to_hash = f"{company}:{claim_type}:{jurisdiction}:{strength}:{timestamp}"
-    full_hash = hashlib.sha256(data_to_hash.encode("utf-8")).hexdigest()
+    full_hash    = hashlib.sha256(data_to_hash.encode("utf-8")).hexdigest()
 
-    tx_id = f"hash-only:{full_hash[:16]}"
+    tx_id = "PENDING_WALLET_SIGNATURE"  # fallback if node script fails
 
     try:
         result = subprocess.run(
             ["node", "casper_tx.mjs", full_hash, str(strength), claim_type],
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=45,
             env={
                 **os.environ,
                 "CASPER_PRIVATE_KEY": os.getenv("CASPER_PRIVATE_KEY", ""),
+                "CASPER_PUBLIC_KEY":  os.getenv("CASPER_PUBLIC_KEY", ""),
                 "CSPR_CLOUD_API_KEY": os.getenv("CSPR_CLOUD_API_KEY", ""),
             },
             cwd=os.path.dirname(os.path.abspath(__file__)) + "/.."
         )
-        output = json.loads(result.stdout.strip())
-        if output.get("success"):
-            tx_id = output["deployHash"]
-            print(f"[Casper Logger] Real TX on testnet: {tx_id}")
+
+        if result.stdout.strip():
+            output = json.loads(result.stdout.strip())
+            if output.get("success"):
+                tx_id = output["deployHash"]
+                print(f"[Casper Logger] ✅ Real TX: {tx_id}")
+            else:
+                print(f"[Casper Logger] ❌ TX failed: {output.get('error')}")
         else:
-            print(f"[Casper Logger] TX failed: {output.get('error')}")
+            print(f"[Casper Logger] ❌ No output. stderr: {result.stderr[:300]}")
+
     except Exception as e:
-        print(f"[Casper Logger] Subprocess error: {e}")
+        print(f"[Casper Logger] ❌ Subprocess error: {e}")
 
     return {
         **state,
         "on_chain_hash": full_hash,
-        "on_chain_tx": tx_id
+        "on_chain_tx":   tx_id,
     }
 
 
