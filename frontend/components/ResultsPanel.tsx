@@ -24,9 +24,7 @@ export default function ResultsPanel({ result, onReset }: Props) {
   const [copied, setCopied]   = useState(false)
   const [tab, setTab]         = useState<"letter" | "research">("letter")
   const [signing, setSigning] = useState(false)
-  const [txStatus, setTxStatus] = useState<string>(
-    result.on_chain_tx || "PENDING_WALLET_SIGNATURE"
-  )
+  const [txStatus, setTxStatus] = useState<string>("PENDING_WALLET_SIGNATURE")
 
   const sd          = result.score_data
   const scoreOffset = 283 - (283 * result.case_strength) / 100
