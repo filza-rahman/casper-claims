@@ -45,8 +45,7 @@ export default function ResultsPanel({ result, onReset }: Props) {
   }
   try {
     setSigning(true)
-    const casperSdk = await import("casper-js-sdk")
-    const sdk = (casperSdk as any).default || casperSdk
+    const sdk = require("casper-js-sdk")
     const { DeployUtil, CLPublicKey, CasperClient } = sdk
 
     const provider = (window as any).CasperWalletProvider({ timeout: 1800000 })
