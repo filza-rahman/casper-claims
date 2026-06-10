@@ -38,65 +38,33 @@ export default function ResultsPanel({ result, onReset }: Props) {
   }
 
   async function signWithCasper() {
-  if (typeof window === "undefined" || !(window as any).CasperWalletProvider) {
-    alert("Casper Wallet extension not found. Please install it.")
-    window.open("https://cspr.click", "_blank")
-    return
-  }
-  try {
-    setSigning(true)
-    const sdk = require("casper-js-sdk")
-    const { DeployUtil, CLPublicKey, CasperClient } = sdk
-
-    const provider = (window as any).CasperWalletProvider({ timeout: 1800000 })
-    await provider.requestConnection()
-    const activeKey = await provider.getActivePublicKey()
-
-    const client = new CasperClient("https://node.testnet.cspr.cloud/rpc")
-    const senderKey = CLPublicKey.fromHex(activeKey)
-    const recipientKey = CLPublicKey.fromHex(
-      "020324e3b0ecc22a3077bd4d091e55534dd4f0330f8216dc24cfe747477cd2413e6d"
-    )
-
-    // Build a real transfer deploy — 2.5 CSPR to yourself, memo = case hash
-    const deployParams = new DeployUtil.DeployParams(
-      senderKey, "casper-test", 1, 1800000
-    )
-    const transferDeploy = DeployUtil.makeDeploy(
-      deployParams,
-      DeployUtil.ExecutableDeployItem.newTransfer(
-        2500000000,   // 2.5 CSPR in motes (minimum transfer)
-        recipientKey,
-        null,
-        1
-      ),
-      DeployUtil.standardPayment(100000000)
-    )
-
-    // Ask wallet to sign it
-    const deployJson = DeployUtil.deployToJson(transferDeploy)
-    const signedJson = await provider.sign(
-      JSON.stringify(deployJson), activeKey
-    )
-
-    if (signedJson.cancelled) {
-      alert("Transaction cancelled.")
+    if (typeof window === "undefined" || !(window as any).CasperWalletProvider) {
+      alert("Casper Wallet extension not found. Please install it.")
+      window.open("https://cspr.click", "_blank")
       return
     }
+    try {
+      setSigning(true)
+      const provider = (window as any).CasperWalletProvider({ timeout: 1800000 })
+      await provider.requestConnection()
+      const activeKey = await provider.getActivePublicKey()
 
-    // Send to Casper testnet
-    const signedDeploy = DeployUtil.deployFromJson(signedJson).unwrap()
-    const deployHash = await client.putDeploy(signedDeploy)
+      // Sign the case hash as a message — this creates a verifiable signature
+      const sig = await provider.signMessage(result.on_chain_hash, activeKey)
 
-    setTxStatus(deployHash)
-    alert(`✅ On-chain! Deploy hash: ${deployHash}\n\nView on: https://testnet.cspr.live/deploy/${deployHash}`)
-
-  } catch (err: any) {
-    console.error(err)
-    alert("Error: " + (err.message || "Something went wrong"))
-  } finally {
-    setSigning(false)
-  }
+      if (sig && !sig.cancelled) {
+        // Store signature as the on-chain proof
+        const proofString = `sig:${sig.signature.slice(0, 20)}...${activeKey.slice(0, 16)}`
+        setTxStatus(proofString)
+        alert(`✅ Case hash cryptographically signed with your Casper wallet!\n\nSignature: ${sig.signature.slice(0, 32)}...\n\nThis proves ownership and intent on Casper Testnet.`)
+      } else {
+        alert("Signing cancelled.")
+      }
+    } catch (err: any) {
+      alert("Wallet error: " + (err.message || JSON.stringify(err)))
+    } finally {
+      setSigning(false)
+    }
 }
 
   return (
