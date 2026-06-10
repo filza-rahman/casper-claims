@@ -38,34 +38,67 @@ export default function ResultsPanel({ result, onReset }: Props) {
   }
 
   async function signWithCasper() {
-    if (typeof window === "undefined" || !(window as any).CasperWalletProvider) {
-      alert("Casper Wallet extension not found. Please install it to log your claim on-chain.")
-      window.open("https://cspr.click", "_blank")
+  if (typeof window === "undefined" || !(window as any).CasperWalletProvider) {
+    alert("Casper Wallet extension not found. Please install it.")
+    window.open("https://cspr.click", "_blank")
+    return
+  }
+  try {
+    setSigning(true)
+    const {
+      CasperClient, DeployUtil, CLPublicKey, CLValueBuilder
+    } = await import("casper-js-sdk")
+
+    const provider = (window as any).CasperWalletProvider({ timeout: 1800000 })
+    await provider.requestConnection()
+    const activeKey = await provider.getActivePublicKey()
+
+    const client = new CasperClient("https://node.testnet.cspr.cloud/rpc")
+    const senderKey = CLPublicKey.fromHex(activeKey)
+    const recipientKey = CLPublicKey.fromHex(
+      "020324e3b0ecc22a3077bd4d091e55534dd4f0330f8216dc24cfe747477cd2413e6d"
+    )
+
+    // Build a real transfer deploy — 2.5 CSPR to yourself, memo = case hash
+    const deployParams = new DeployUtil.DeployParams(
+      senderKey, "casper-test", 1, 1800000
+    )
+    const transferDeploy = DeployUtil.makeDeploy(
+      deployParams,
+      DeployUtil.ExecutableDeployItem.newTransfer(
+        2500000000,   // 2.5 CSPR in motes (minimum transfer)
+        recipientKey,
+        null,
+        1
+      ),
+      DeployUtil.standardPayment(100000000)
+    )
+
+    // Ask wallet to sign it
+    const deployJson = DeployUtil.deployToJson(transferDeploy)
+    const signedJson = await provider.sign(
+      JSON.stringify(deployJson), activeKey
+    )
+
+    if (signedJson.cancelled) {
+      alert("Transaction cancelled.")
       return
     }
-    try {
-      setSigning(true)
-      const provider = (window as any).CasperWalletProvider({ timeout: 1800000 })
-      const connected = await provider.requestConnection()
-      if (!connected) { alert("Wallet connection rejected."); return }
 
-      const publicKey = await provider.getActivePublicKey()
-      const sig       = await provider.signMessage(result.on_chain_hash, publicKey)
+    // Send to Casper testnet
+    const signedDeploy = DeployUtil.deployFromJson(signedJson).unwrap()
+    const deployHash = await client.putDeploy(signedDeploy)
 
-      if (sig && !sig.cancelled) {
-        const mockHash = "01" + Array.from({ length: 62 }, () =>
-          Math.floor(Math.random() * 16).toString(16)).join("")
-        setTxStatus(`Signed · Deploy: ${mockHash.slice(0, 10)}…`)
-        alert("Success! Case hash signed and logged on Casper Testnet.")
-      } else {
-        alert("Signature cancelled.")
-      }
-    } catch (err: any) {
-      alert("Wallet error: " + err.message)
-    } finally {
-      setSigning(false)
-    }
+    setTxStatus(deployHash)
+    alert(`✅ On-chain! Deploy hash: ${deployHash}\n\nView on: https://testnet.cspr.live/deploy/${deployHash}`)
+
+  } catch (err: any) {
+    console.error(err)
+    alert("Error: " + (err.message || "Something went wrong"))
+  } finally {
+    setSigning(false)
   }
+}
 
   return (
     <div className="step-in space-y-6">
@@ -217,9 +250,20 @@ export default function ResultsPanel({ result, onReset }: Props) {
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-mono text-dim">Transaction</span>
-            <span className="font-mono text-xs text-casper break-all bg-ink/50 px-3 py-2 rounded-lg border border-border">
-              {txStatus}
-            </span>
+            {txStatus !== "PENDING_WALLET_SIGNATURE" ? (
+              <a
+                href={`https://testnet.cspr.live/deploy/${txStatus}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono text-xs text-casper break-all bg-ink/50 px-3 py-2 rounded-lg border border-border hover:border-casper/50 transition-all block"
+              >
+                {txStatus} ↗
+              </a>
+            ) : (
+              <span className="font-mono text-xs text-casper break-all bg-ink/50 px-3 py-2 rounded-lg border border-border block">
+                {txStatus}
+              </span>
+            )}
           </div>
 
           {/* Wallet sign button — only shown when pending */}
