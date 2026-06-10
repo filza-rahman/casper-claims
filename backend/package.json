@@ -1,0 +1,8 @@
+{
+  "name": "casper-claims-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "casper-js-sdk": "^2.15.4"
+  }
+}

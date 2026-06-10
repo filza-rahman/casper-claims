@@ -191,10 +191,9 @@ Score the strength of this case."""
 # ── Agent 5: Casper Logger ─────────────────────────────────────────────────────
 
 def casper_logger_agent(state: dict) -> dict:
-    """
-    Prepares the final case hash for the frontend to sign and deploy 
-    using the Casper Wallet browser extension.
-    """
+    import subprocess
+    import sys
+
     company = state.get("company_name", "Unknown")
     claim_type = state.get("claim_type", "other")
     jurisdiction = state.get("jurisdiction", "US")
@@ -204,12 +203,34 @@ def casper_logger_agent(state: dict) -> dict:
     data_to_hash = f"{company}:{claim_type}:{jurisdiction}:{strength}:{timestamp}"
     full_hash = hashlib.sha256(data_to_hash.encode("utf-8")).hexdigest()
 
-    print(f"[Casper Logger] Generated Case Hash for UI signing: {full_hash}")
+    tx_id = f"hash-only:{full_hash[:16]}"
+
+    try:
+        result = subprocess.run(
+            ["node", "casper_tx.mjs", full_hash, str(strength), claim_type],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env={
+                **os.environ,
+                "CASPER_PRIVATE_KEY": os.getenv("CASPER_PRIVATE_KEY", ""),
+                "CSPR_CLOUD_API_KEY": os.getenv("CSPR_CLOUD_API_KEY", ""),
+            },
+            cwd=os.path.dirname(os.path.abspath(__file__)) + "/.."
+        )
+        output = json.loads(result.stdout.strip())
+        if output.get("success"):
+            tx_id = output["deployHash"]
+            print(f"[Casper Logger] Real TX on testnet: {tx_id}")
+        else:
+            print(f"[Casper Logger] TX failed: {output.get('error')}")
+    except Exception as e:
+        print(f"[Casper Logger] Subprocess error: {e}")
 
     return {
         **state,
         "on_chain_hash": full_hash,
-        "on_chain_tx": "PENDING_WALLET_SIGNATURE"
+        "on_chain_tx": tx_id
     }
 
 
