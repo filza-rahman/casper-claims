@@ -13,19 +13,19 @@ from langgraph.graph import StateGraph, END
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from dotenv import load_dotenv
+from langchain_groq import ChatGroq
 
 load_dotenv()
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 CSPR_CLOUD_API_KEY = os.getenv("CSPR_CLOUD_API_KEY", "")
 CSPR_CLOUD_BASE = "https://api.cspr.cloud"
 
-llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
-    google_api_key=GEMINI_API_KEY,
+llm = ChatGroq(
+    model="llama-3.3-70b-versatile",
+    groq_api_key=GROQ_API_KEY,
     temperature=0.3,
 )
-
 
 # ── State ──────────────────────────────────────────────────────────────────────
 
