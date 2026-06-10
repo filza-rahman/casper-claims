@@ -1,7 +1,7 @@
 FROM python:3.13-slim
 
-# Install Node.js 20
-RUN apt-get update && apt-get install -y curl && \
+# Install Node.js 20 + build tools for compiled Python packages
+RUN apt-get update && apt-get install -y curl build-essential && \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y nodejs && \
     apt-get clean
